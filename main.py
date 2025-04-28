@@ -35,14 +35,13 @@ class User(Base):
     user_name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    mobile = Column(String, nullable=False)  # <-- make nullable=True if it's optional
+    mobile = Column(String, nullable=False)  
     country_code = Column(String, nullable=False)
     otp = Column(String, nullable=True)
     otp_expiration = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 Base.metadata.create_all(bind=engine)
 
-# === Helpers ===
 def get_db():
     db = SessionLocal()
     try:
@@ -62,7 +61,6 @@ def create_access_token(data: dict, expires_delta: timedelta):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# === API Routes ===
 # ==== USER REGISTER ====#
 @app.post("/Register")
 def register_user(
@@ -71,27 +69,26 @@ def register_user(
     password: str = Form(...),
     db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == email).first():
-        return {"status": "0", "message": "User Email already exists", "result": {}}
+        return {"status": "0", "message": "User Email Already Exists", "result": {}}
     hashed_password = hash_password(password)
     db_user = User(user_name=user_name, email=email, password=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"status": "1", "message": "User registered successfully!", "id": db_user.id}
+    return {"status": "1", "message": "User Registration Successfully!", "id": db_user.id}
 # ==== USER LOGIN ====#
 @app.post("/Login")
 def login(
     email: str = Form(...),
     password: str = Form(...),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email.strip()).first()
     if not user or not verify_password(password, user.password):
         return {"status": "0", "message": "Invalid credentials", "result": {}}
     access_token = create_access_token(data={"sub": user.email}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {
         "status": "1",
-        "message": "Login successful",
+        "message": "Login Successful",
         "result": {
             "id": user.id,
             "user_name": user.user_name,
@@ -99,46 +96,39 @@ def login(
             "password": user.password,
             "mobile": user.mobile,
             "created_at": str(user.created_at),
-            "token": access_token
-        }
-    }
+            "token": access_token  } }
 # ==== ADD USER  MOBILE_NUMBER ====#    
 @app.post("/send_otp")
 def send_otp(
     id: int = Form(...),
     mobile: str = Form(...),
     country_code: Optional[str] = Form(None),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == id).first()
-
     if not user:
-        return {"status": "0", "message": "User not found", "result": {}}
-
-    # Update mobile and country_code
+        return {"status": "0", "message": "User Not Found", "result": {}}
     user.mobile = mobile
     if country_code is not None:
         user.country_code = country_code
-    # Generate and assign OTP
-    otp = "9999"  # You can replace this with random OTP generation
+    otp = "9999"  
     user.otp = otp
     user.otp_expiration = datetime.utcnow() + timedelta(minutes=10)
     db.commit()
     return {
         "status": "1",
         "message": f"OTP sent to {country_code or ''}{mobile}",
-        "result": {"otp": otp}
-    }
+        "result": {"otp": otp} }
 # === VERIFY -- OTP === #    
 @app.post("/verify-otp")
 def verify_otp(
     mobile: str = Form(...),
     otp: str = Form(...),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db)):
     user = db.query(User).filter(User.mobile == mobile).first()
-    if not user or user.otp != otp:
-        return {"status": "0", "message": "Invalid mobile number or OTP", "results": {}}
+    if not user :
+        return {"status": "0", "message": "Invalid mobile number", "results": {}}
+    elif user.otp != otp:
+        return {"status": "0", "message": "Invalid  OTP", "results": {}}
     return {
         "status": "1",
         "message": "OTP Verified",
@@ -148,43 +138,29 @@ def verify_otp(
             "email": user.email,
             "mobile": user.mobile,
             "created_at": str(user.created_at),
-            "otp": user.otp
-        }
-    }
+            "otp": user.otp  }  }
 # === FORGOT PASSWORD === #
 @app.post("/forgot_password")
 def forgot_password(
     method: Literal["email", "phone"] = Form(...),
-    identifier: str = Form(...),  # could be email or phone
-    db: Session = Depends(get_db)
-):
-    # Find user by email or phone
+    identifier: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        User.email == identifier if method == "email" else User.mobile == identifier
-    ).first()
-
+        User.email == identifier if method == "email" else User.mobile == identifier).first()
     if not user:
         return {"status": "0", "message": "User not found", "result": {}}
-
-    # Generate OTP
     otp = '9999'
     user.otp = otp
     user.otp_expiration = datetime.utcnow() + timedelta(minutes=10)
     db.commit()
-
-    # Simulate sending OTP
     contact = user.email if method == "email" else user.mobile
     print(f"Sending OTP to {method}: {contact} - OTP: {otp}")
-
     return {
         "status": "1",
         "message": f"OTP sent to your {method}",
         "result": {
             "contact": contact,
-            "masked": mask_email(contact) if method == "email" else mask_phone(contact)
-        }
-    }
-
+            "masked": mask_email(contact) if method == "email" else mask_phone(contact)  }   }
+    
 def mask_email(email):
     local, domain = email.split("@")
     return f"{local[:3]}{'*'*(len(local)-3)}@{domain}"
@@ -198,12 +174,9 @@ def verify_otp(
     method: Literal["email", "phone"] = Form(...),
     identifier: str = Form(...),
     otp: str = Form(...),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        User.email == identifier if method == "email" else User.mobile == identifier
-    ).first()
-
+        User.email == identifier if method == "email" else User.mobile == identifier ).first()
     if not user or user.otp != otp:
         return {"status": "0", "message": "Invalid OTP", "result": {}}
     otp_expiration = datetime.fromisoformat(user.otp_expiration)
@@ -217,23 +190,16 @@ def reset_password(
     user_id: int = Form(...),  # or get from token/session in production
     new_password: str = Form(...),
     confirm_password: str = Form(...),
-    db: Session = Depends(get_db)
-):
-    # 1. Fetch user
+    db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    # 2. Validate passwords
     if new_password != confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-
-    # 3. Update the password
+        return {"status":"0","message":"password and confirm password do not match"}
     user.password = hash_password(new_password)
     db.commit()
-
     return {"status": "1", "message": "Password reset successfully"}
-
+# ===  Delete User === #
 @app.post("/Delete")
 def delete_user(
     user_id: int = Form(...),
